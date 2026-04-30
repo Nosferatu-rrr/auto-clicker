@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Виртуальное окружение
+venv/
+ENV/
+env/
+
+# Документация Koda
+KODA.md
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Логи
+logs/
+*.log
+
+# Переменные окружения
+.env
+.env.local
+
+# Системные файлы
+.DS_Store
+Thumbs.db
+
+# Папка с изображениями (раскомментируйте, если не нужно коммитить образцы)
+# clicker_images/
