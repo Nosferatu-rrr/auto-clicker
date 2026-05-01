@@ -10,6 +10,7 @@ import sys
 import tkinter as tk
 from tkinter import ttk, messagebox, scrolledtext
 import threading
+from pynput import keyboard
 
 # Импорт локальных модулей
 from clicker import AutoClicker
@@ -18,19 +19,19 @@ from screenshot import ScreenshotEditor
 
 class AutoClickerGUI:
     """Графический интерфейс автокликера."""
-    
+
     def __init__(self):
         """Инициализация GUI."""
         self.root = tk.Tk()
         self.root.title("Auto Clicker")
         self.root.geometry("500x450")
         self.root.resizable(True, True)
-        
+
         # Настройки
         self.images_dir = "clicker_images"
         self.confidence = tk.DoubleVar(value=0.8)
         self.delay = tk.DoubleVar(value=0.5)
-        
+
         # Инициализация кликера
         self.clicker = AutoClicker(
             images_dir=self.images_dir,
@@ -38,16 +39,30 @@ class AutoClickerGUI:
             delay=self.delay.get()
         )
         self.clicker.set_log_callback(self.add_log)
-        
+
         # Переменные состояния
         self.is_running = False
-        
+
+        # Запуск слушателя горячих клавиш
+        self.hotkey_listener = keyboard.Listener(on_press=self.on_press)
+        self.hotkey_listener.start()
+
         # Создаем интерфейс
         self.create_widgets()
-        
+
         # Обновление статуса
         self.update_status()
-    
+
+    def on_press(self, key):
+        """Обработка нажатия горячих клавиш."""
+        try:
+            if key == keyboard.Key.esc:
+                if self.is_running:
+                    self.root.after(0, self.stop_clicker)
+                    self.add_log("🛑 Экстренная остановка (ESC)", 'warning')
+        except Exception as e:
+            print(f"Ошибка горячей клавиши: {e}")
+
     def create_widgets(self):
         """Создание виджетов интерфейса."""
         # Основной фрейм
@@ -206,14 +221,12 @@ class AutoClickerGUI:
         
         def on_save(filename):
             self.add_log(f"Изображение сохранено: {filename}", 'success')
-            self.root.after(0, self.update_images_count)
+            self.update_images_count()
         
         # Создаем редактор
         editor = ScreenshotEditor(self.images_dir)
-        editor.on_save_callback = on_save
-        
-        # Запускаем редактор (он создаст свое окно и mainloop)
-        editor.show_editor()
+        # Запускаем редактор, передавая главное окно
+        editor.show_editor(self.root, on_save_callback=on_save)
     
     def on_setting_change(self, *args):
         """Обработка изменения настроек."""

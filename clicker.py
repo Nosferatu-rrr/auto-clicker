@@ -57,7 +57,7 @@ class AutoClicker:
             self.log_callback(log_msg)
     
     def load_images(self):
-        """Загрузить все изображения из папки."""
+        """Загрузить и кэшировать все изображения из папки."""
         self.images = []
         
         if not os.path.exists(self.images_dir):
@@ -66,43 +66,50 @@ class AutoClicker:
         
         # Поддерживаемые расширения
         extensions = ['*.png', '*.jpg', '*.jpeg', '*.bmp']
-        
+        image_paths = []
         for ext in extensions:
             pattern = os.path.join(self.images_dir, ext)
-            self.images.extend(glob.glob(pattern))
+            image_paths.extend(glob.glob(pattern))
         
-        self.log(f"Загружено изображений: {len(self.images)}", 'info')
+        for img_path in image_paths:
+            try:
+                template = cv2.imread(img_path, cv2.IMREAD_COLOR)
+                if template is not None:
+                    # Храним путь (для логов) и само изображение
+                    self.images.append({
+                        'path': img_path,
+                        'name': os.path.basename(img_path),
+                        'data': template
+                    })
+            except Exception as e:
+                self.log(f"Ошибка загрузки {img_path}: {e}", 'error')
+        
+        self.log(f"Загружено и кэшировано изображений: {len(self.images)}", 'info')
         return len(self.images) > 0
     
-    def find_image_on_screen(self, template_path):
+    def find_image_on_screen(self, template_data):
         """
         Найти изображение на экране.
         
         Args:
-            template_path: Путь к изображению-образцу
+            template_data: OpenCV изображение (numpy array)
             
         Returns:
             tuple: (x, y) координаты центра или None
         """
         try:
-            # Загружаем шаблон
-            template = cv2.imread(template_path, cv2.IMREAD_COLOR)
-            if template is None:
-                self.log(f"Не удалось загрузить изображение: {template_path}", 'error')
-                return None
-            
             # Делаем скриншот экрана
             screenshot = pyautogui.screenshot()
             screenshot_cv = cv2.cvtColor(np.array(screenshot), cv2.COLOR_RGB2BGR)
             
             # Поиск шаблона
-            result = cv2.matchTemplate(screenshot_cv, template, cv2.TM_CCOEFF_NORMED)
+            result = cv2.matchTemplate(screenshot_cv, template_data, cv2.TM_CCOEFF_NORMED)
             min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
             
             # Проверка точности
             if max_val >= self.confidence:
                 # Вычисляем центр
-                h, w = template.shape[:2]
+                h, w = template_data.shape[:2]
                 center_x = max_loc[0] + w // 2
                 center_y = max_loc[1] + h // 2
                 return (center_x, center_y)
@@ -131,25 +138,27 @@ class AutoClicker:
         """Основной цикл кликера."""
         self.log("Кликер запущен", 'info')
         
+        # Загружаем изображения один раз при старте цикла
+        if not self.load_images():
+            self.log("Нет изображений для работы. Остановка.", 'warning')
+            self.is_running = False
+            return
+
         while not self.stop_event.is_set():
             if self.is_paused:
                 time.sleep(0.1)
                 continue
             
-            # Загружаем изображения при каждом цикле
-            if not self.load_images():
-                time.sleep(1)
-                continue
-            
             found = False
             
-            # Проверяем каждое изображение
-            for img_path in self.images:
+            # Проверяем каждое кэшированное изображение
+            for img_obj in self.images:
                 if self.stop_event.is_set():
                     break
                 
-                position = self.find_image_on_screen(img_path)
+                position = self.find_image_on_screen(img_obj['data'])
                 if position:
+                    self.log(f"Найдено совпадение: {img_obj['name']}", 'success')
                     self.click_at_position(position[0], position[1])
                     found = True
                     time.sleep(self.delay)
@@ -158,7 +167,7 @@ class AutoClicker:
             if not found:
                 time.sleep(0.5)  # Небольшая задержка перед следующим поиском
         
-        self.log("Кликер остановлен", 'info')
+        self.log("Цикл кликера завершен", 'info')
     
     def start(self):
         """Запустить кликер."""

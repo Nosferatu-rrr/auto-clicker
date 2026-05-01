@@ -44,45 +44,39 @@ class ScreenshotEditor:
             print(f"Ошибка создания скриншота: {e}")
             return False
     
-    def show_editor(self, on_save_callback=None):
+    def show_editor(self, parent_root, on_save_callback=None):
         """Показать редактор скриншотов."""
         if not self.capture_full_screen():
             messagebox.showerror("Ошибка", "Не удалось сделать скриншот")
             return None
         
-        print(f"Размер скриншота: {self.image.width}x{self.image.height}")
+        # Создаем Toplevel вместо Tk
+        editor_window = tk.Toplevel(parent_root)
+        editor_window.title("Выделите область для сохранения")
+        editor_window.attributes('-fullscreen', True)
+        editor_window.attributes('-topmost', True)
         
-        # Создаем отдельное окно для редактора
-        editor_root = tk.Tk()
-        editor_root.title("Выделите область для сохранения")
-        editor_root.attributes('-fullscreen', True)
-        editor_root.attributes('-topmost', True)
+        self.root = editor_window
         
-        self.root = editor_root
-        
-        # Canvas с белым фоном
-        self.canvas = tk.Canvas(editor_root, cursor='cross', bg='gray20')
+        # Canvas
+        self.canvas = tk.Canvas(editor_window, cursor='cross', bg='gray20', highlightthickness=0)
         self.canvas.pack(fill=tk.BOTH, expand=True)
         
-        # Конвертируем PIL Image в PhotoImage (поддерживается только RGBA -> PNG)
-        # Сохраняем в буфер
+        # Конвертируем PIL Image в PhotoImage
         import io
         buffer = io.BytesIO()
         self.image.save(buffer, format='PNG')
         buffer.seek(0)
-        self.photo = tk.PhotoImage(master=editor_root, data=buffer.getvalue())
+        self.photo = tk.PhotoImage(master=editor_window, data=buffer.getvalue())
         
         # Показываем скриншот
         self.canvas.create_image(0, 0, anchor=tk.NW, image=self.photo)
-        
-        print("Скриншот отображен на canvas")
-        editor_root.update()
         
         # Обработчики событий
         self.canvas.bind('<ButtonPress-1>', self.on_button_press)
         self.canvas.bind('<B1-Motion>', self.on_drag)
         self.canvas.bind('<ButtonRelease-1>', self.on_button_release)
-        editor_root.bind('<Escape>', self.on_escape)
+        editor_window.bind('<Escape>', self.on_escape)
         
         # Инструкции
         info_text = "Выделите область мышкой. Нажмите ESC для отмены."
@@ -92,9 +86,7 @@ class ScreenshotEditor:
                                 font=('Arial', 14, 'bold'))
         
         self.on_save_callback = on_save_callback
-        
-        # Запускаем главный цикл редактора
-        editor_root.mainloop()
+        self.parent_root = parent_root
         
         return self.temp_image_name
     
@@ -135,19 +127,23 @@ class ScreenshotEditor:
     
     def show_save_dialog(self):
         """Показать диалог сохранения изображения."""
-        # Сначала уничтожаем редактор скриншотов
+        # Закрываем окно редактора (Toplevel)
         if self.root:
             self.root.destroy()
             self.root = None
         
-        # Создаем новое окно для диалога
-        save_window = tk.Tk()
+        # Создаем Toplevel для диалога
+        save_window = tk.Toplevel(self.parent_root)
         save_window.title("Сохранить изображение")
-        save_window.geometry("350x120")
+        save_window.geometry("350x150")
         save_window.resizable(False, False)
         save_window.attributes('-topmost', True)
         
-        tk.Label(save_window, text="Имя файла:", font=('Arial', 11)).pack(pady=5)
+        # Центрируем относительно родителя
+        save_window.transient(self.parent_root)
+        save_window.grab_set()
+        
+        tk.Label(save_window, text="Имя файла:", font=('Arial', 11)).pack(pady=10)
         
         # Генерируем имя по умолчанию
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -173,19 +169,21 @@ class ScreenshotEditor:
             x1, y1 = min(self.start_x, self.end_x), min(self.start_y, self.end_y)
             x2, y2 = max(self.start_x, self.end_x), max(self.start_y, self.end_y)
             
-            if x1 >= x2 or y1 >= y2:
+            if abs(x1 - x2) < 5 or abs(y1 - y2) < 5:
                 messagebox.showwarning("Внимание", "Область выделения слишком мала!")
                 return
             
-            cropped = self.image.crop((x1, y1, x2, y2))
-            cropped.save(filepath)
-            
-            self.temp_image_name = filename
-            
-            save_window.destroy()
-            
-            if self.on_save_callback:
-                self.on_save_callback(filename)
+            try:
+                cropped = self.image.crop((x1, y1, x2, y2))
+                cropped.save(filepath)
+                self.temp_image_name = filename
+                
+                save_window.destroy()
+                
+                if self.on_save_callback:
+                    self.on_save_callback(filename)
+            except Exception as e:
+                messagebox.showerror("Ошибка", f"Не удалось сохранить файл: {e}")
         
         def cancel_action():
             save_window.destroy()
@@ -199,8 +197,6 @@ class ScreenshotEditor:
         # Привязка Enter к сохранению
         save_window.bind('<Return>', lambda e: save_action())
         save_window.bind('<Escape>', lambda e: cancel_action())
-        
-        save_window.mainloop()
 
 
 def make_screenshot(images_dir="clicker_images"):

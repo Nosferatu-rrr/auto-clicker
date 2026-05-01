@@ -47,5 +47,8 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Папка с изображениями (раскомментируйте, если не нужно коммитить образцы)
-# clicker_images/
+# Папка с изображениями-образцами
+clicker_images/
+
+.gemini/
+gha-creds-*.json
