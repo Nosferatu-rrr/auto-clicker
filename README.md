@@ -17,6 +17,12 @@
 
 ## Установка
 
+### Через uv (рекомендуется)
+1. Установите uv: `curl -LsSf https://astral.sh/uv/install.sh | sh`
+2. Создайте окружение: `uv venv`
+3. Установите зависимости: `uv pip install -r requirements.txt`
+
+### Традиционный способ
 ```bash
 # Установка зависимостей
 pip install -r requirements.txt
